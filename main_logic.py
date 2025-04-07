@@ -12,7 +12,7 @@ def fetch_pokemon_cards(query):
     url = f"https://api.pokemontcg.io/v2/cards?q={encoded_query}&pageSize=250"
     
     headers = {
-        "X-Api-Key": "8c905568-44b1-43f0-bb2e-8965ffded91f"
+        "X-Api-Key": "API KEY"
     }
     
     try:
@@ -141,7 +141,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-TOKEN = '7769264407:AAEM8lklmGg8lhz2fUUxkYhfoIMMN34obrU'
+TOKEN = 'TOKEN'
 
 async def start(update, context):
     await update.message.reply_text('Ciao! Sono il tuo bot Pokemon per restare sempre aggiornato.\nUsa /help per ottenere informazioni sui comandi.')
