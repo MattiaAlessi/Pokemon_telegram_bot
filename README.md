@@ -69,5 +69,3 @@ Contributions, issues, and feature requests are welcome! Feel free to check [iss
 
 Give a ⭐️ if this project helped you!
 
----
-Made with ❤️ by [Your Name]
