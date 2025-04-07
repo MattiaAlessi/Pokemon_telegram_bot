@@ -93,7 +93,7 @@ def fetch_pokemon_cards(query):
     url = f"https://api.pokemontcg.io/v2/cards?q={encoded_query}&pageSize=250"
     
     headers = {
-        "X-Api-Key": "API"
+        "X-Api-Key": "8c905568-44b1-43f0-bb2e-8965ffded91f"
     }
     
     try:
@@ -222,7 +222,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-TOKEN = 'TOKEN'
+TOKEN = '7769264407:AAEM8lklmGg8lhz2fUUxkYhfoIMMN34obrU'
 
 async def start(update, context):
     await update.message.reply_text('Ciao! Sono il tuo bot Pokemon per restare sempre aggiornato.\nUsa /help per ottenere informazioni sui comandi.')
@@ -302,6 +302,20 @@ async def help_command(update, context):
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
 # Update main function
+# Move surrender_command outside of main()
+async def surrender_command(update, context):
+    if 'game_card' not in context.user_data:
+        await update.message.reply_text("Non c'è nessuna partita in corso!")
+        return
+    
+    card = context.user_data['game_card']
+    await update.message.reply_text(f"Il Pokemon era {card['name']}!")
+    await update.message.reply_photo(
+        photo=card['images']['large'],
+        caption=f"✨ {card['name']} dal set {card['set']['name']}"
+    )
+    del context.user_data['game_card']
+
 def main():
     application = Application.builder().token(TOKEN).build()
 
@@ -311,20 +325,8 @@ def main():
     application.add_handler(CommandHandler("search", search_command))
     application.add_handler(CommandHandler("about", about_command))
     application.add_handler(CommandHandler("game", game_command))
-    # Add after game_command function
-    async def surrender_command(update, context):
-        if 'game_card' not in context.user_data:
-            await update.message.reply_text("Non c'è nessuna partita in corso!")
-            return
-        
-        card = context.user_data['game_card']
-        await update.message.reply_text(f"Il Pokemon era {card['name']}!")
-        await update.message.reply_photo(
-            photo=card['images']['large'],
-            caption=f"✨ {card['name']} dal set {card['set']['name']}"
-        )
-        del context.user_data['game_card']
-    
+    application.add_handler(CommandHandler("surrender", surrender_command))  # Add this line
+
     # Update message handler to check for game guesses
     async def message_handler(update, context):
         if not await handle_game_guess(update, context):
