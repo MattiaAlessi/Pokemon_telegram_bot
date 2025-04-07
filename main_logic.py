@@ -4,6 +4,87 @@ import requests
 from urllib.parse import quote
 from PIL import Image
 import io
+# Add at the top with other imports
+import sqlite3
+from datetime import datetime
+
+# Add after imports
+def setup_database():
+    conn = sqlite3.connect('scores.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS scores
+                 (user_id INTEGER PRIMARY KEY, username TEXT, score INTEGER, last_updated TEXT)''')
+    conn.commit()
+    conn.close()
+
+def update_score(user_id, username, score):
+    conn = sqlite3.connect('scores.db')
+    c = conn.cursor()
+    c.execute('''INSERT OR REPLACE INTO scores (user_id, username, score, last_updated)
+                 VALUES (?, ?, ?, ?)''', (user_id, username, score, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+
+def get_scores():
+    conn = sqlite3.connect('scores.db')
+    c = conn.cursor()
+    c.execute('SELECT user_id, username, score FROM scores ORDER BY score DESC')
+    scores = c.fetchall()
+    conn.close()
+    return scores
+
+def get_medal(position):
+    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+    return medals.get(position, "👤")
+
+async def leaderboard_command(update, context):
+    scores = get_scores()
+    if not scores:
+        await update.message.reply_text("Nessun punteggio registrato ancora!")
+        return
+    
+    leaderboard_text = "🏆 *Classifica Giocatori*\n\n"
+    for i, (user_id, username, score) in enumerate(scores, 1):
+        username = username.replace('*', '\\*').replace('_', '\\_').replace('`', '\\`')
+        leaderboard_text += f"{get_medal(i)} {username}: {score} punti\n"
+    
+    await update.message.reply_text(leaderboard_text, parse_mode='MarkdownV2')
+
+# Modify handle_game_guess to use database
+async def handle_game_guess(update, context):
+    if 'game_card' not in context.user_data:
+        return False
+    
+    guess = update.message.text.lower()
+    card = context.user_data['game_card']
+    correct_name = card['name'].lower()
+    user_id = update.effective_user.id
+    username = update.effective_user.username or str(user_id)
+    
+    if guess == correct_name:
+        # Get current score from database and update
+        conn = sqlite3.connect('scores.db')
+        c = conn.cursor()
+        c.execute('SELECT score FROM scores WHERE user_id = ?', (user_id,))
+        current_score = c.fetchone()
+        new_score = (current_score[0] if current_score else 0) + 1
+        conn.close()
+        
+        update_score(user_id, username, new_score)
+        await update.message.reply_text(f"🎉 Corretto! È {card['name']}!\nPunteggio: {new_score} punti")
+        await update.message.reply_photo(
+            photo=card['images']['large'],
+            caption=f"✨ {card['name']} dal set {card['set']['name']}"
+        )
+        del context.user_data['game_card']
+        return True
+    else:
+        await update.message.reply_text("❌ Sbagliato! Prova ancora o usa /surrender per arrenderti.")
+        return True
+
+# In main(), add these lines after other command handlers
+    setup_database()
+    application.add_handler(CommandHandler("leaderboard", leaderboard_command))
 
 def fetch_pokemon_cards(query):
     """Esegue la query sull'API con encoding corretto"""
@@ -12,7 +93,7 @@ def fetch_pokemon_cards(query):
     url = f"https://api.pokemontcg.io/v2/cards?q={encoded_query}&pageSize=250"
     
     headers = {
-        "X-Api-Key": "API KEY"
+        "X-Api-Key": "8c905568-44b1-43f0-bb2e-8965ffded91f"
     }
     
     try:
@@ -141,7 +222,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-TOKEN = 'TOKEN'
+TOKEN = '7769264407:AAEM8lklmGg8lhz2fUUxkYhfoIMMN34obrU'
 
 async def start(update, context):
     await update.message.reply_text('Ciao! Sono il tuo bot Pokemon per restare sempre aggiornato.\nUsa /help per ottenere informazioni sui comandi.')
@@ -178,7 +259,7 @@ async def game_command(update, context):
         
         # Get dimensions
         width, height = image.size
-        # Crop just the top and bottom borders, keeping the full artwork
+        # Crop 1/8 from top and 1/6 from bottom
         crop_top = height // 8
         crop_bottom = height // 6
         cropped_image = image.crop((0, crop_top, width, height - crop_bottom))
@@ -189,50 +270,16 @@ async def game_command(update, context):
         img_byte_arr.seek(0)
         
         # Send cropped image
-        await update.message.reply_text("❓ Indovina il Pokemon! Osserva l'immagine e scrivi il nome.")
+        await update.message.reply_text("❓ Indovina il Pokemon!\nScrivi il nome o usa /surrender per arrenderti")
         await update.message.reply_photo(
             photo=img_byte_arr,
-            caption="❓❓❓"
+            caption="Chi è questo Pokemon? 🤔"
         )
     except Exception as e:
         print(f"Error processing image: {e}")
         await update.message.reply_text("Errore nel caricamento dell'immagine. Riprova.")
         return
 
-async def handle_game_guess(update, context):
-    if 'game_card' not in context.user_data:
-        return False
-    
-    guess = update.message.text.lower()
-    card = context.user_data['game_card']
-    correct_name = card['name'].lower()
-    
-    if guess == correct_name:
-        await update.message.reply_text(f"🎉 Corretto! È {card['name']}!")
-        await update.message.reply_photo(
-            photo=card['images']['large'],
-            caption=f"✨ {card['name']} dal set {card['set']['name']}"
-        )
-        del context.user_data['game_card']
-        return True
-    else:
-        await update.message.reply_text("❌ Sbagliato! Prova ancora o usa /surrender per arrenderti.")
-        return True
-
-async def surrender_command(update, context):
-    if 'game_card' not in context.user_data:
-        await update.message.reply_text("Non c'è nessuna partita in corso!")
-        return
-    
-    card = context.user_data['game_card']
-    await update.message.reply_text(f"Il Pokemon era {card['name']}!")
-    await update.message.reply_photo(
-        photo=card['images']['large'],
-        caption=f"✨ {card['name']} dal set {card['set']['name']}"
-    )
-    del context.user_data['game_card']
-
-# Update help command
 async def help_command(update, context):
     help_text = (
         '🎮 *Comandi Disponibili:*\n\n'
@@ -246,6 +293,8 @@ async def help_command(update, context):
         '🎲 */game*\n'
         '   • Inizia un gioco di indovina il Pokemon\n'
         '   • /surrender per arrenderti\n\n'
+        '🏆 */leaderboard*\n'
+        '   • Mostra la classifica dei giocatori\n\n'
         'ℹ️ */about*\n'
         '   • Mostra informazioni sul bot\n\n'
         '💡 *Suggerimento:* Per risultati migliori, usa nomi precisi'
@@ -262,7 +311,19 @@ def main():
     application.add_handler(CommandHandler("search", search_command))
     application.add_handler(CommandHandler("about", about_command))
     application.add_handler(CommandHandler("game", game_command))
-    application.add_handler(CommandHandler("surrender", surrender_command))
+    # Add after game_command function
+    async def surrender_command(update, context):
+        if 'game_card' not in context.user_data:
+            await update.message.reply_text("Non c'è nessuna partita in corso!")
+            return
+        
+        card = context.user_data['game_card']
+        await update.message.reply_text(f"Il Pokemon era {card['name']}!")
+        await update.message.reply_photo(
+            photo=card['images']['large'],
+            caption=f"✨ {card['name']} dal set {card['set']['name']}"
+        )
+        del context.user_data['game_card']
     
     # Update message handler to check for game guesses
     async def message_handler(update, context):
